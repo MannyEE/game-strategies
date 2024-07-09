@@ -35,7 +35,7 @@ module Take_turn : sig
       { piece    : Game.Piece.t
       ; position : Game.Position.t
       }
-    [@@deriving sexp_of, bin_io]
+    [@@deriving sexp_of, bin_io, fields]
   end
 
   val rpc : (Query.t, Response.t) Rpc.Rpc.t

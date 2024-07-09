@@ -167,7 +167,7 @@ Consider `List.init`.)_
 
 ### Exercise 1: Where can I move?
 
-Each turn, your AI _needs_ to make a decision of "which free available spot" it should
+Each turn, your AI _dune needs_ to make a decision of "which free available spot" it should
 pick. Let's find "all free available spots"! Implement
 `available_moves` in `lib/main.ml`.
 

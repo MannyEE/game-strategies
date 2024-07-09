@@ -41,7 +41,7 @@ module Take_turn = struct
       { piece    : Game.Piece.t
       ; position : Game.Position.t
       }
-    [@@deriving sexp_of, bin_io]
+    [@@deriving sexp_of, bin_io, fields]
   end
 
   let rpc =
