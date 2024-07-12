@@ -2,6 +2,12 @@ open! Core
 open! Async
 open! Game_strategies_common_lib
 
+type direction = 
+  | Down
+  | Right
+  | Diagonal_Left
+  | Diagonal_Right
+
 module Exercises = struct
   (* Here are some functions which know how to create a couple different
      kinds of games *)
@@ -37,10 +43,12 @@ module Exercises = struct
 
   let print_game (game : Game.t) =
     let game_len = Game.Game_kind.board_length game.game_kind in
+
     let _row_list =
       List.init game_len ~f:(fun row ->
         let _col_list =
           List.init game_len ~f:(fun col ->
+            
             let cur_position =
               Map.find
                 game.board
@@ -50,10 +58,8 @@ module Exercises = struct
             in
             (match cur_position with
              | None -> print_string " "
-             | Some position ->
-               (match position with
-                | X -> print_string "X"
-                | O -> print_string "O"));
+             | Some X -> print_string "X"
+            | Some O -> print_string "O");
             match col with
             | 0 -> print_newline ()
             | _ -> print_string " | ")
@@ -93,19 +99,25 @@ module Exercises = struct
   ;;
 
   (* Exercise 1 *)
+
+
   let available_moves (game : Game.t) : Game.Position.t list =
 
     let game_len = Game.Game_kind.board_length game.game_kind in
-    List.init (game_len * game_len) ~f:(fun pos ->
+  
+    let x = List.init game_len ~f:(Fn.id ) in
+    let coordinates = List.cartesian_product x x in
 
-      let row = (pos) / 3 in
-      let col = (pos) % 3 in
+
+    List.filter_map coordinates ~f:(fun (row, col) ->
+
+      (* let row = (pos) / 3 in
+      let col = (pos) % 3 in *)
 
       let cur_position = Map.find game.board { Game.Position.row = row; column = col} in
       match cur_position with
-        | None ->  [ { Game.Position.row = row; column = col}]
-        | Some _ -> [] )
-    |> List.concat
+        | None ->  Some { Game.Position.row = row; column = col}
+        | Some _ -> None )
     
   ;;
 
@@ -116,37 +128,178 @@ module Exercises = struct
 
     [%expect
       {|
-((row 0) (column 1))
-((row 0) (column 2))
-((row 1) (column 1))
-((row 1) (column 2))
-((row 2) (column 1))
+      ((row 0) (column 1))
+      ((row 0) (column 2))
+      ((row 1) (column 1))
+      ((row 1) (column 2))
+      ((row 2) (column 1))
       |}];
     return ()
-;;
+    ;;
+
+  
+  let rec check_places (depth : int) (game : Game.t) (prev_position : Game.Position.t) direction : Game.Evaluation.t = 
+    (* print_endline ("prev pos" ^ Game.Position.to_string prev_position);  *)
+    (* print_s (Game.sexp_of_t game); *)
+    (* print_s [%sexp (game : Game.t)]; *)
+
+    let cur_position =  (
+        match direction with 
+        | Down -> {Game.Position.row = prev_position.row + 1; column = prev_position.column}
+        | Right -> {Game.Position.row = prev_position.row; column = prev_position.column + 1}
+        | Diagonal_Left -> {Game.Position.row = (prev_position.row + 1); column = (prev_position.column - 1)}
+        | Diagonal_Right ->{Game.Position.row = prev_position.row + 1; column = prev_position.column + 1}) in
+
+    (* print_endline ("cur pos" ^ Game.Position.to_string cur_position);  *)
+
+    match Game.Position.in_bounds cur_position ~game_kind:game.game_kind with 
+    | false -> 
+      (* print_endline " out of bounds"; *)
+      Game_continues
+    | true ->
+
+    let cur_piece =  Map.find game.board cur_position in
+    let prev_piece =  Map.find game.board prev_position in
+
+    match cur_piece, prev_piece with 
+    | None, None | None, _ | _ , None -> 
+      (* print_endline "no piece";  *)
+      Game_continues 
+    | Some cur_piece, Some prev_piece ->
+
+    match Int.equal (depth) (Game.Game_kind.win_length game.game_kind - 1) with 
+    | true -> 
+      (match Game.Piece.equal (cur_piece) (prev_piece) with 
+      | true ->
+        (* print_endline "winner"; *)
+        let winner = Map.find (game.board) cur_position in
+        Game_over {winner}
+      | false -> 
+        (* print_endline "blocked"; *)
+        Game_continues)
+
+    | false ->
+      
+        match Game.Piece.equal prev_piece cur_piece with 
+        | true ->
+          (* print_endline ("cur pos" ^ Game.Position.to_string cur_position); *)
+          (check_places (depth + 1) game cur_position direction)
+        | false -> 
+          (* print_endline "blocked 2"; *)
+          
+          Game_continues
 
   (* Exercise 2 *)
+    ;;
+
+  let check_pieces position game = 
+    let right_diagonal = check_places 1 (game) (position) Diagonal_Right in
+    let left_diagonal = check_places 1 (game) (position) Diagonal_Left in
+
+    let top_row = List.init (Game.Game_kind.board_length game.game_kind) ~f:(fun col -> 
+      let position = {Game.Position.row = 0; column = col} in
+      check_places 1 (game) (position) Down
+      ) in
+
+    let left_col = List.init (Game.Game_kind.board_length game.game_kind) ~f:(fun row -> 
+      let position = {Game.Position.row = row; column = 0} in
+      check_places 1 (game) (position) Right
+      ) in
+
+    top_row @ left_col @ [right_diagonal] @ [left_diagonal]
+    ;;
   let evaluate (game : Game.t) : Game.Evaluation.t =
-    ignore game;
-    failwith "Implement me!"
+    (* print_s (Game.sexp_of_t game); *)
+(* 
+    let right_diagonal = check_places 1 (game) ({Game.Position.row = 0; column = 0}) Diagonal_Right in
+    let left_diagonal = check_places 1 (game) ({Game.Position.row = 0; column =(Game.Game_kind.board_length game.game_kind - 1)}) Diagonal_Left in
+
+    let top_row = List.init (Game.Game_kind.board_length game.game_kind) ~f:(fun col -> 
+      let position = {Game.Position.row = 0; column = col} in
+      check_places 1 (game) (position) Down
+      ) in
+
+    let left_col = List.init (Game.Game_kind.board_length game.game_kind) ~f:(fun row -> 
+      let position = {Game.Position.row = row; column = 0} in
+      check_places 1 (game) (position) Right
+      ) in *)
+
+
+    let occupied_spaces = Map.keys game.board in
+    (* let possible_wins = top_row @ left_col @ [right_diagonal] @ [left_diagonal] in *)
+    let possible_wins = List.concat_map occupied_spaces ~f:(fun position -> check_pieces position game) in
+
+    let result = List.find possible_wins ~f:(fun game_result ->
+      match game_result with 
+      | Illegal_move | Game_continues -> false
+      | _ -> true) in
+
+    match result with 
+    | None -> 
+      print_endline "Game continues"; 
+      Game_continues
+    
+    | Some result -> 
+      (* print_endline "Game Over"; *)
+      print_s [%sexp (result : Game.Evaluation.t)];
+      result
+
+
+
+    
+
   ;;
+
+  let%expect_test "available_spaces" =
+    let _game_st = evaluate non_win in
+    
+
+    [%expect
+      {| Game continues |}];
+    return ()
+    ;;
+
 
   (* Exercise 3 *)
   let winning_moves ~(me : Game.Piece.t) (game : Game.t)
     : Game.Position.t list
     =
-    ignore me;
-    ignore game;
-    failwith "Implement me!"
+    let possible_moves = available_moves game in
+
+    List.filter possible_moves ~f:(fun position ->
+      let testing_game = game |> place_piece ~piece:me ~position:position in
+      match evaluate testing_game with 
+      | Game_continues | Illegal_move -> false
+      | _ -> true
+      )
   ;;
 
   (* Exercise 4 *)
   let losing_moves ~(me : Game.Piece.t) (game : Game.t)
     : Game.Position.t list
     =
-    ignore me;
-    ignore game;
-    failwith "Implement me!"
+    let possible_moves  = available_moves game in
+    let winning_opponent_moves =  winning_moves ~me:(Game.Piece.flip me) game in
+
+    match List.length winning_opponent_moves with 
+    | 0 -> []
+    | 1 -> List.filter possible_moves ~f:(fun position -> 
+      Game.Position.equal (List.hd_exn winning_opponent_moves) position)
+    | _ -> possible_moves
+
+
+  ;;
+
+
+  let _available_moves_that_do_not_immediately_lose (me : Game.Piece.t) (game : Game.t) = 
+
+    let possible_moves  = available_moves game in
+    let losing_moves  = losing_moves ~me:me game in
+
+    List.filter possible_moves ~f:(fun position -> 
+      not (List.exists losing_moves ~f:(Game.Position.equal position)))
+
+
   ;;
 
   let exercise_one =
